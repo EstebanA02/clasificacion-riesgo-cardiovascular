@@ -1,0 +1,61 @@
+project: SISTEMA DE SOFTWARE CON MACHINE LEARNING PARA CLASIFICACIÓN DE RIESGO CARDIOVASCULAR
+stack:
+  language: Python
+  version: ">=3.13"
+  framework: FastAPI
+  orm: SQLAlchemy
+  database: SQLite
+  templating: Jinja2
+  frontend: Bootstrap (CDN)
+  ml: [scikit-learn, xgboost, joblib, pandas]
+  package_manager: uv
+persistence: hybrid
+strict_tdd: false
+
+context: |
+  Cardiovascular risk classification system for UNIMINUTO research seedbed.
+  Classifies profile similarity to diagnosed cases (NOT future disease prediction).
+  Terminology: "clasificación"/"clasificar" only — never "predicción"/"predecir".
+  Database: patients + classifications tables (fixed schema).
+  Metric: recall prioritized over accuracy/precision/F1.
+  Commands: uv sync, uv run uvicorn app.main:app --reload, uv run pytest.
+
+testing:
+  runner: pytest
+  command: "uv run pytest"
+  framework: pytest >=9.1.1
+  layers:
+    unit: true
+    integration: true
+    e2e: false
+  tools:
+    integration: httpx >=0.28.1
+  coverage:
+    available: false
+    command: "uv run pytest --cov"
+  quality:
+    linter: { available: false, command: "—" }
+    type_checker: { available: false, command: "—" }
+    formatter: { available: false, command: "—" }
+
+phases:
+  propose:
+    require_issue: true
+    template: "proposal.md"
+  spec:
+    format: "delta"
+    scenarios_required: true
+  design:
+    architecture_review: true
+    max_lines: 400
+  tasks:
+    granularity: "work-unit"
+    tdd_enforced: false
+  apply:
+    commit_strategy: "work-unit"
+    test_first: false
+  verify:
+    coverage_threshold: 80
+    mutation_testing: false
+  archive:
+    sync_delta_specs: true

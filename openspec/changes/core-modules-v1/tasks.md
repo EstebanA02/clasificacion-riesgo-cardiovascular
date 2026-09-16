@@ -63,14 +63,14 @@
 ### Task 1.4: Training Script (train.py)
 **Scaffold (yo)**: Create root `train.py` with imports, type hints, docstrings, empty `train()` function, `if __name__ == "__main__": train()`, argparse for `--data-path` and `--model-path`
 **Implementas (tú)**: 
-- Load `data/cardio.csv`
+- Load `data/cardio_train.csv`
 - Define 3 sklearn Pipelines: LR+StandardScaler, RF, XGB+StandardScaler
 - Stratified train/val split
 - Fit each, compute recall on validation
 - Select best by recall, save with `joblib.dump()` to `models/model.joblib`
 - Print metrics table for all 3 models
 **Revisamos (juntos)**: Verify recall is selection metric, pipeline includes preprocessing, model saved correctly
-**Test (juntos)**: Run `python train.py` (requires `data/cardio.csv`), verify `models/model.joblib` created, then `pytest tests/test_ml.py` (ML validation: recall ≥ 0.85 on holdout)
+**Test (juntos)**: Run `python train.py` (requires `data/cardio_train.csv`), verify `models/model.joblib` created, then `pytest tests/test_ml.py` (ML validation: recall ≥ 0.85 on holdout)
 
 ### Task 1.5: Inference Service (MLService)
 **Scaffold (yo)**: Create `src/app/ml/inference.py` with `MLService` class: `__init__(model_path: Path)`, `classify(features: dict) -> tuple[str, float]` with empty body + `pass`, `from_app_state(cls, request: Request) -> MLService` classmethod
@@ -299,7 +299,7 @@ src/app/
 │   └── js/main.js
 train.py
 models/model.joblib (gitignored)
-data/cardio.csv
+data/cardio_train.csv
 tests/
 ├── conftest.py
 ├── test_ml.py

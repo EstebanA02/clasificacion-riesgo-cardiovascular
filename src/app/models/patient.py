@@ -1,6 +1,6 @@
 """Patient SQLAlchemy model."""
 
-from sqlalchemy import String
+from sqlalchemy import String, CheckConstraint
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.database import Base
@@ -16,6 +16,11 @@ class Patient(Base):
     #Fields
     name: Mapped[str] = mapped_column(String(100), nullable=False)
     gender: Mapped[str] = mapped_column(String(1), nullable=False)  # 'M' or 'F'
+    
+    # Constraint a nivel BD: solo 'M' o 'F'
+    __table_args__ = (
+        CheckConstraint("gender IN ('M', 'F')", name="ck_patient_gender"),
+    )
 
     # Relationship
     classifications: Mapped[list["Classification"]] = relationship(
@@ -23,4 +28,4 @@ class Patient(Base):
     )
 
     def __repr__(self) -> str:
-        return f"<Patient(id={self.id})>"
+        return f"<Patient(id={self.id}, name='{self.name}', gender='{self.gender}')>"

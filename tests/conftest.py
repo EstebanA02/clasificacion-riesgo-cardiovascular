@@ -1,7 +1,7 @@
 """Pytest fixtures and configuration."""
 
 import pytest
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
 
@@ -18,8 +18,16 @@ def test_db_path():
 
 @pytest.fixture(scope="session")
 def test_engine(test_db_path):
-    """Create test engine."""
+    """Create test engine with foreign keys enabled for SQLite."""
     engine = create_engine(test_db_path, echo=False)
+    
+    # Enable foreign keys for SQLite
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_connection, connection_record):
+        cursor = dbapi_connection.cursor()
+        cursor.execute("PRAGMA foreign_keys=ON")
+        cursor.close()
+    
     Base.metadata.create_all(engine)
     yield engine
     engine.dispose()
@@ -46,7 +54,7 @@ def client():
 @pytest.fixture
 def sample_patient_data():
     """Sample patient data for testing."""
-    return {"name": "Juan Pérez", "gender": "M"}
+    return {"name": "Juan Perez", "gender": "M"}
 
 
 @pytest.fixture

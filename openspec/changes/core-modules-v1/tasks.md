@@ -55,29 +55,47 @@
 **Test (juntos)**: `pytest tests/test_models.py` — create tables, insert, query back
 
 ### Task 1.3: ML Schemas
-**Scaffold (yo)**: Create `src/app/ml/schemas.py` with `ClassificationInput` (11 features + cross-field validator for ap_hi > ap_lo, age 18-100, enums for cholesterol/gluc) and `ClassificationOutput`
-**Implementas (tú)**: Add all validators, ensure Literal enums match spec exactly
-**Revisamos (juntos)**: Test edge cases: systolic ≤ diastolic, age bounds, enum values
+**Scaffold (yo)**: Create `src/app/ml/schemas.py` with `ClassificationInput` (11 features + cross-field validator for ap_hi > ap_lo, age 18-100 **en AÑOS**, enums for cholesterol/gluc) and `ClassificationOutput`
+**Implementas (tú)**: Add all validators, ensure Literal enums match spec exactly. **IMPORTANTE**: El validador de `age` debe esperar y validar AÑOS (18-100), no días — porque el usuario ingresa edad en años desde el formulario.
+**Revisamos (juntos)**: Test edge cases: systolic ≤ diastolic, age bounds (18-100 años), enum values
 **Test (juntos)**: `pytest tests/test_ml_schemas.py` — parametrize all validation scenarios
 
 ### Task 1.4: Training Script (train.py)
-**Scaffold (yo)**: Create root `train.py` with imports, type hints, docstrings, empty `train()` function, `if __name__ == "__main__": train()`, argparse for `--data-path` and `--model-path`
+**Scaffold (yo)**: Create root `train.py` with imports, type hints, docstrings, empty `train()` function, `if __name__ == "__main__": train()`, argparse for `--data-path`, `--model-path`, `--report-path`, `--cv-folds`
 **Implementas (tú)**: 
-- Load `data/cardio_train.csv`
-- Define 3 sklearn Pipelines: LR+StandardScaler, RF, XGB+StandardScaler
-- Stratified train/val split
-- Fit each, compute recall on validation
-- Select best by recall, save with `joblib.dump()` to `models/model.joblib`
-- Print metrics table for all 3 models
-**Revisamos (juntos)**: Verify recall is selection metric, pipeline includes preprocessing, model saved correctly
-**Test (juntos)**: Run `python train.py` (requires `data/cardio_train.csv`), verify `models/model.joblib` created, then `pytest tests/test_ml.py` (ML validation: recall ≥ 0.85 on holdout)
+- Load `data/cardio_train.csv` con **separador `;`** (`pd.read_csv(..., sep=';')`)
+- **Descartar columna `id`** (índice del dataset, no es feature)
+- **Convertir `age` de días a años**: `age_years = age_days // 365` ANTES de entrenar
+- **Filtrar filas fisiológicamente imposibles ANTES de entrenar** (documentado con hallazgos EDA):
+  - `ap_hi < 70` o `ap_hi > 250`
+  - `ap_lo < 40` o `ap_lo > 200`
+  - `ap_hi <= ap_lo`
+  - `height < 120` o `height > 220`
+  - `weight < 30` o `weight > 200`
+  - Total esperado: ~1.8% del dataset (~1226 + 60 registros)
+  - **Hallazgos EDA documentados en comentario**:
+    - `ap_hi` min -150, max 16020 (errores de captura)
+    - `height` min 55 (error de captura)
+    - `weight` min 10 (error de captura)
+    - Rangos de presión más amplios que límites clínicos AHA/ACC 2025
+- **StratifiedKFold(n_splits=5, shuffle=True, random_state=42)** sobre TODO el dataset (parametrizable con `--cv-folds`, default 5)
+- Mantener los 3 Pipelines existentes sin cambios
+- Evaluar cada pipeline con `sklearn.model_selection.cross_validate` con `scoring={"accuracy","precision","recall","f1"}`. Guardar media y desviación estándar de cada métrica por modelo
+- Seleccionar el modelo con mayor MEDIA de recall
+- Reentrenar (fit) el pipeline ganador con el 100 % de los datos y guardarlo con `joblib.dump` en `models/model.joblib` (sigue siendo un Pipeline con `predict_proba`; el contrato de MLService no cambia)
+- Imprimir una tabla con las 4 métricas (media ± desv.) de los 3 modelos, marcando el seleccionado
+- Guardar el mismo resumen en `models/train_report.json`: métricas por modelo, nombre del seleccionado, MIN_RECALL (constante = 0.85 definida al inicio del archivo) y "meets_min_recall" (bool)
+- Si el recall medio del ganador es < MIN_RECALL: NO lanzar error. Imprimir una advertencia con el valor obtenido y la brecha, y continuar guardando el modelo
+**Revisamos (juntos)**: Verify recall is selection metric, pipeline includes preprocessing, model saved correctly, age convertido, id descartado, filtros aplicados
+**Test (juntos)**: Run `python train.py` (requires `data/cardio_train.csv`), verify `models/model.joblib` and `models/train_report.json` created, then `pytest tests/test_ml.py` (ML validation: recall medio en validación cruzada; si es < 0.85, advertencia, no fallo)
 
 ### Task 1.5: Inference Service (MLService)
 **Scaffold (yo)**: Create `src/app/ml/inference.py` with `MLService` class: `__init__(model_path: Path)`, `classify(features: dict) -> tuple[str, float]` with empty body + `pass`, `from_app_state(cls, request: Request) -> MLService` classmethod
 **Implementas (tú)**:
 - Load pipeline in `__init__` via `joblib.load`
-- In `classify`: validate input against `ClassificationInput`, convert to DataFrame, `predict_proba[:,1]`, map to "riesgo"/"no_riesgo" using threshold (embedded or config), return (label, float(probability))
-**Revisamos (juntos)**: Verify single load at startup, threshold handling, error messages for invalid features
+- In `classify`: validate input against `ClassificationInput`, convert to DataFrame, **mapeo de género: 'F'→1, 'M'→2** (dataset usa 1=Mujer, 2=Hombre; BD guarda 'M'/'F'; conversión SOLO aquí), `predict_proba[:,1]`, map to "riesgo"/"no_riesgo" using threshold (embedded or config), return (label, float(probability))
+- **Documentar en inference.py**: comentario explicando por qué la conversión de género ocurre aquí y no en otro módulo
+**Revisamos (juntos)**: Verify single load at startup, threshold handling, error messages for invalid features, mapeo género correcto
 **Test (juntos)**: `pytest tests/test_ml.py` — integration: lifespan load, classify() returns correct tuple, edge cases
 
 ### Task 1.6: FastAPI Lifespan + Main App
@@ -227,7 +245,7 @@
 **Implementas (tú)**: 
 - Fill any missing integration tests per spec scenarios
 - Run full `pytest` — all must pass
-- Verify ML recall ≥ 0.85 on holdout (can be separate slow test)
+- Verify ML recall medio en validación cruzada (test slow, solo advertencia si < 0.85)
 **Revisamos (juntos)**: Test coverage per module, no flaky tests, CI-ready
 **Test (juntos)**: `pytest -v` — full suite green
 
@@ -238,7 +256,7 @@
 - Run `uv lock` to generate `uv.lock`
 - Verify all contracts from spec are met
 **Revisamos (juntos)**: README accurate, lock file committed, all acceptance criteria satisfied
-**Test (juntos)**: Fresh clone → uv sync → train.py → uvicorn → pytest all pass (sin pasos manuales de descarga de datos, cardio.csv versionado)
+**Test (juntos)**: Fresh clone → uv sync → train.py → uvicorn → pytest all pass (sin pasos manuales de descarga de datos, cardio_train.csv versionado)
 
 ---
 

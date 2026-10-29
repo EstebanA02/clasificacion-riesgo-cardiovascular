@@ -11,3 +11,6 @@ wheels/
 
 # SDD artifacts (local, non-shareable)
 .atl/
+
+.opencode/
+models/model.joblib

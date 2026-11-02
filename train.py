@@ -43,7 +43,16 @@ MIN_RECALL = 0.85
 RANDOM_STATE = 42
 
 def load_data(data_path: Path = DEFAULT_DATA_PATH) -> pd.DataFrame:
-    
+    """Carga y limpia el dataset para entrenamiento.
+
+    Lee el CSV (separador ';'), descarta 'id', convierte age de dias a anios
+    y filtra filas fisiologicamente imposibles (hallazgos EDA: ap_hi entre
+    -150 y 16020, height min 55, weight min 10; ~1.98% del dataset se descarta).
+
+    Contrato: devuelve las 11 features en FEATURE_ORDER + target 'cardio'.
+    El dataset usa gender numerico (1=Mujer, 2=Hombre); la conversion a
+    'M'/'F' vive unicamente en MLService.classify().
+    """
     df = pd.read_csv(data_path, sep=';')
     df = df.drop(columns=['id'])
     df['age'] = df['age']//365
@@ -68,12 +77,18 @@ def load_data(data_path: Path = DEFAULT_DATA_PATH) -> pd.DataFrame:
     descartadas = rows_before - len(df)
     porcentaje = descartadas / rows_before * 100
     print(
-    f"Filas descartadas por filtros fisiológicos: {descartadas} ({porcentaje:.2f}%)")
+    f"Filas descartadas por filtros fisiologicos: {descartadas} ({porcentaje:.2f}%)")
     
     return df
 
 def build_pipelines() -> dict[str, Pipeline]:
-        
+    """Crea los 3 pipelines candidatos para comparacion.
+
+    Solo logistic_regression lleva StandardScaler: LR ajusta coeficientes con
+    descenso de gradiente y sufre el rango dispar de escalas de las features;
+    los arboles dividen por umbrales y son invariantes a escala.
+    Todos con random_state=42 para reproducibilidad.
+    """
     pipelines = {
         'logistic_regression': Pipeline([
             ('scaler', StandardScaler()),
@@ -94,7 +109,13 @@ def build_pipelines() -> dict[str, Pipeline]:
 def cross_validate_pipelines(
     df: pd.DataFrame, cv_folds: int,
 ) -> dict[str, dict[str, dict[str, float]]]:
-        
+    """Validacion cruzada estratificada de los 3 pipelines.
+
+    StratifiedKFold conserva la proporcion del target en cada fold. Se
+    reporta media +/- desviacion de cada metrica; scoring debe ser la
+    lista SCORING (los sets lanzan InvalidParameterError).
+    Devuelve {modelo: {metrica: {"mean": float, "std": float}}}.
+    """
     pipelines = build_pipelines()
     
     X = df[FEATURE_ORDER]
@@ -127,7 +148,12 @@ def select_and_fit(
     cv_results: dict,
     df: pd.DataFrame,
 ) -> Pipeline:
+    """Selecciona el ganador por mayor recall medio y lo reentrena.
 
+    La CV solo SELECCIONA: los modelos de cada fold solo vieron ~80% de los
+    datos. El pipeline de produccion se reentrena aqui con el 100% del
+    dataset. Devuelve (pipeline_ajustado, nombre_ganador).
+    """
     best_name = max(cv_results, key=lambda n: cv_results[n]['recall']['mean'])
     best_pipeline = pipelines[best_name]
     
@@ -146,7 +172,13 @@ def save_artifacts(
     cv_results: dict,
     best_name: str,
 ) -> None:
-    
+    """Guarda el ganador (joblib) y el reporte academico (JSON).
+
+    El reporte incluye selected_model, metrics (media/std por modelo),
+    min_recall y meets_min_recall. Crea el directorio destino si no existe.
+    Si el recall medio del ganador < MIN_RECALL: warnings.warn con valor
+    obtenido y brecha, sin interrumpir el guardado.
+    """
     Path(model_path).parent.mkdir(parents=True, exist_ok=True)
     Path(report_path).parent.mkdir(parents=True, exist_ok=True)
     
@@ -177,7 +209,11 @@ def save_artifacts(
         json.dump(report, f, indent= 4, ensure_ascii=False)
         
 def print_metrics_table(cv_results: dict, best_name: str) -> None:
-    
+    """Imprime la tabla de metricas por modelo, marcando el seleccionado.
+
+    Formato ASCII sin tildes: la consola de Windows (cp1252) corrompe
+    acentos y simbolos unicode.
+    """
     ANCHO = 22
     print()
     print(f"{'Modelo':<{ANCHO}} {'Metrica':<10} {'Media':>7} {'Desv.':>7}")
@@ -196,7 +232,7 @@ def train(
     report_path: Path = DEFAULT_REPORT_PATH,
     cv_folds: int = 5,
 ) -> None:
-    
+    """Orquesta el proceso completo: carga, CV, seleccion, tabla y guardado."""
     df = load_data(data_path)
     pipelines = build_pipelines()
     cv_results = cross_validate_pipelines(df, cv_folds)
@@ -205,7 +241,7 @@ def train(
     save_artifacts(best_pipeline, model_path, report_path, cv_results, best_name)
 
 def parse_args() -> argparse.Namespace:
-    
+    """Configura los argumentos CLI del script (parte del scaffold)."""
     parser = argparse.ArgumentParser(
         description="Entrenamiento del modelo con validación cruzada estratificada"
     )
@@ -216,7 +252,7 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 def main() -> None:
-    
+    """Punto de entrada del script."""
     args = parse_args()
     train(
         data_path=args.data_path,

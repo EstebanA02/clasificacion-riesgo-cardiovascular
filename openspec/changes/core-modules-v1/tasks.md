@@ -81,10 +81,11 @@
 - **StratifiedKFold(n_splits=5, shuffle=True, random_state=42)** sobre TODO el dataset (parametrizable con `--cv-folds`, default 5)
 - Mantener los 3 Pipelines existentes sin cambios
 - Evaluar cada pipeline con `sklearn.model_selection.cross_validate` con `scoring={"accuracy","precision","recall","f1"}`. Guardar media y desviación estándar de cada métrica por modelo
-- Seleccionar el modelo con mayor MEDIA de recall
-- Reentrenar (fit) el pipeline ganador con el 100 % de los datos y guardarlo con `joblib.dump` en `models/model.joblib` (sigue siendo un Pipeline con `predict_proba`; el contrato de MLService no cambia)
+- **Ajuste de umbral por modelo (plan B del documento): `cross_val_predict(pipeline, X, y, cv=cv, method="predict_proba")[:, 1]` con el MISMO StratifiedKFold; con `precision_recall_curve(y, probs)` alinear precision/recall con thresholds recortando el último elemento; umbral = el MÁS ALTO con recall >= MIN_RECALL (registrar `precision_at_min_recall` y `recall_at_threshold`); si ningún punto alcanza: advertencia y usar el umbral de mayor recall, sin error. El umbral se calcula SOLO con probabilidades out-of-fold, nunca con el modelo reentrenado**
+- Seleccionar el modelo con MAYOR `precision_at_min_recall` (recall como restricción, precision como desempate)
+- Reentrenar (fit) el pipeline ganador con el 100 % de los datos y guardar con `joblib.dump` en `models/model.joblib` un dict `{"pipeline": <Pipeline>, "threshold": <float>}` (el contrato de MLService cambia: classify compara contra el threshold guardado)
 - Imprimir una tabla con las 4 métricas (media ± desv.) de los 3 modelos, marcando el seleccionado
-- Guardar el mismo resumen en `models/train_report.json`: métricas por modelo, nombre del seleccionado, MIN_RECALL (constante = 0.85 definida al inicio del archivo) y "meets_min_recall" (bool)
+- Guardar en `models/train_report.json`: métricas a umbral 0.5 por modelo (media/desv.), `threshold` + `precision_at_min_recall` + `recall_at_threshold` por modelo, nombre del seleccionado, MIN_RECALL (constante = 0.85, NO se baja) y "meets_min_recall" (bool, con recall_at_threshold)
 - Si el recall medio del ganador es < MIN_RECALL: NO lanzar error. Imprimir una advertencia con el valor obtenido y la brecha, y continuar guardando el modelo
 **Revisamos (juntos)**: Verify recall is selection metric, pipeline includes preprocessing, model saved correctly, age convertido, id descartado, filtros aplicados
 **Test (juntos)**: Run `python train.py` (requires `data/cardio_train.csv`), verify `models/model.joblib` and `models/train_report.json` created, then `pytest tests/test_ml.py` (ML validation: recall medio en validación cruzada; si es < 0.85, advertencia, no fallo)
@@ -93,7 +94,8 @@
 **Scaffold (yo)**: Create `src/app/ml/inference.py` with `MLService` class: `__init__(model_path: Path)`, `classify(features: dict) -> tuple[str, float]` with empty body + `pass`, `from_app_state(cls, request: Request) -> MLService` classmethod
 **Implementas (tú)**:
 - Load pipeline in `__init__` via `joblib.load`
-- In `classify`: validate input against `ClassificationInput`, convert to DataFrame, **mapeo de género: 'F'→1, 'M'→2** (dataset usa 1=Mujer, 2=Hombre; BD guarda 'M'/'F'; conversión SOLO aquí), `predict_proba[:,1]`, map to "riesgo"/"no_riesgo" using threshold (embedded or config), return (label, float(probability))
+- `MLService.__init__` debe leer el dict `{"pipeline", "threshold"}` guardado por Task 1.4: `joblib.load` → `self.pipeline = artifact["pipeline"]`, `self.threshold = float(artifact["threshold"])`
+- In `classify`: validate input against `ClassificationInput`, convert to DataFrame, **mapeo de género: 'F'→1, 'M'→2** (dataset usa 1=Mujer, 2=Hombre; BD guarda 'M'/'F'; conversión SOLO aquí), `predict_proba[:,1]`, comparar la probabilidad CONTRA `self.threshold` (NO contra 0.5), map to "riesgo"/"no_riesgo", return (label, float(probability))
 - **Documentar en inference.py**: comentario explicando por qué la conversión de género ocurre aquí y no en otro módulo
 **Revisamos (juntos)**: Verify single load at startup, threshold handling, error messages for invalid features, mapeo género correcto
 **Test (juntos)**: `pytest tests/test_ml.py` — integration: lifespan load, classify() returns correct tuple, edge cases

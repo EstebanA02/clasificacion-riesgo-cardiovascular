@@ -1,7 +1,7 @@
 {
-    "selected_model": "random_forest",
+    "selected_model": "xgboost",
     "min_recall": 0.85,
-    "meets_min_recall": false,
+    "meets_min_recall": true,
     "metrics": {
         "logistic_regression": {
             "accuracy": {
@@ -19,7 +19,10 @@
             "f1": {
                 "mean": 0.7079095227595652,
                 "std": 0.0029737486461401137
-            }
+            },
+            "threshold": 0.3588052985876431,
+            "precision_at_min_recall": 0.6424277508126642,
+            "recall_at_threshold": 0.8500220945647371
         },
         "random_forest": {
             "accuracy": {
@@ -37,7 +40,10 @@
             "f1": {
                 "mean": 0.7004423691540795,
                 "std": 0.004268722901873584
-            }
+            },
+            "threshold": 0.29,
+            "precision_at_min_recall": 0.6134364509412314,
+            "recall_at_threshold": 0.8505523641184268
         },
         "xgboost": {
             "accuracy": {
@@ -55,7 +61,10 @@
             "f1": {
                 "mean": 0.7180015807654779,
                 "std": 0.003937336508258905
-            }
+            },
+            "threshold": 0.3245275914669037,
+            "precision_at_min_recall": 0.6461393765675385,
+            "recall_at_threshold": 0.8500220945647371
         }
     }
 }

@@ -14,3 +14,7 @@ wheels/
 
 .opencode/
 models/model.joblib
+
+# Artefactos de pruebas (se regeneran al correr los tests)
+test.db
+cv_risk.db

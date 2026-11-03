@@ -1,4 +1,4 @@
-"""Tests for database models."""
+"""Pruebas de los modelos de base de datos (Patient y Classification)."""
 
 import pytest
 from sqlalchemy.orm import Session
@@ -11,161 +11,159 @@ from app.database import Base, engine
 
 
 class TestPatientModel:
-    """Test Patient model."""
+    """Modelo Patient (paciente)."""
 
     def test_patient_model_exists(self, db_session: Session, sample_patient_data):
-        """Test Patient model can be instantiated, persisted, and retrieved.
-        
-        This test verifies the complete lifecycle: create -> commit -> refresh -> query.
-        Uses the sample_patient_data fixture for consistent test data.
+        """Patient se instancia, persiste y se recupera.
+
+        Verifica el ciclo completo: crear -> commit -> refresh -> consultar,
+        usando el fixture sample_patient_data para datos consistentes.
         """
-        # Arrange: create patient from fixture data
+        # Arrange: crear el paciente a partir del fixture
         patient = Patient(**sample_patient_data)
-        
-        # Act: persist to database
+
+        # Act: persistir en la base de datos
         db_session.add(patient)
         db_session.commit()
-        db_session.refresh(patient)  # Load generated ID and defaults
-        
-        # Assert: verify persistence and field values
-        assert patient.id is not None  # PK auto-generated
+        db_session.refresh(patient)  # carga el id generado y los defaults
+
+        # Assert: verificar persistencia y valores de los campos
+        assert patient.id is not None  # PK autogenerada
         assert patient.name == 'Juan Perez'
         assert patient.gender == 'M'
-        
-        # Verify retrieval by PK works
+
+        # Verificar que la lectura por PK funciona
         found = db_session.get(Patient, patient.id)
         assert found is not None
         assert found.name == 'Juan Perez'
 
     def test_patient_has_required_fields(self):
-        """Test Patient model has exactly 3 required fields with correct types.
-        
-        Validates table metadata without needing a database connection.
-        Checks: column names, types, nullability, primary key.
+        """Patient tiene sus 3 campos con tipos correctos.
+
+        Valida el metadata de la tabla sin necesidad de conexión a BD:
+        nombres de columnas, tipos, nullability y primary key.
         """
-        # Inspect table metadata
+        # Inspeccionar el metadata de la tabla
         cols = {c.name: c for c in Patient.__table__.columns}
-        
-        # id: primary key, integer
+
+        # id: primary key, entero
         assert 'id' in cols and cols['id'].primary_key
-        # name: string, not nullable, max 100 chars
+        # name: string, no nullable, máximo 100 caracteres
         assert 'name' in cols and isinstance(cols['name'].type, String) and not cols['name'].nullable
-        # gender: string(1), not nullable, 'M' or 'F'
+        # gender: string(1), no nullable, 'M' o 'F'
         assert 'gender' in cols and isinstance(cols['gender'].type, String) and not cols['gender'].nullable
-        # Exact count ensures no extra fields slipped in
-        # (commented to allow future extensions if needed)
-        # assert len(cols) == 3
 
     def test_patient_create_and_query(self, db_session: Session):
-        """Test manual patient creation and retrieval (without fixture).
-        
-        Demonstrates basic CRUD flow: instantiate -> add -> commit -> refresh -> query.
-        Uses different data than fixture to verify independent creation works.
+        """Creación y consulta manual de un Patient (sin fixture).
+
+        Demuestra el flujo CRUD básico: instanciar -> add -> commit ->
+        refresh -> consultar, con datos distintos a los del fixture.
         """
-        # Arrange: create patient manually
+        # Arrange: crear paciente manualmente
         patient = Patient(name='Ana', gender='F')
-        
-        # Act: persist
+
+        # Act: persistir
         db_session.add(patient)
         db_session.commit()
-        db_session.refresh(patient)  # Load generated PK
-        
-        # Assert: verify fields and PK generation
+        db_session.refresh(patient)  # carga la PK generada
+
+        # Assert: verificar campos y generación de PK
         assert patient.id is not None
         assert patient.name == 'Ana'
         assert patient.gender == 'F'
-        
-        # Verify query by PK returns same data
+
+        # Verificar que la consulta por PK devuelve los mismos datos
         found = db_session.get(Patient, patient.id)
         assert found is not None
         assert found.name == 'Ana'
 
     def test_patient_gender_constraint(self, db_session: Session):
-        """Test gender column rejects invalid values at database level.
-        
-        Attempts to insert gender='X' (invalid). Expects IntegrityError
-        from CHECK constraint or database-level validation.
-        Rolls back transaction to keep session clean for next test.
+        """La columna gender rechaza valores inválidos a nivel BD.
+
+        Intenta insertar gender='X' con el CHECK constraint
+        ck_patient_gender; como resultado se genera un IntegrityError,
+        se valida que se produce ese error y se hace rollback.
         """
-        # Arrange: patient with invalid gender
-        patient = Patient(name='Ana', gender='X')  # 'X' not in ('M', 'F')
+        # Arrange: paciente con género inválido
+        patient = Patient(name='Ana', gender='X')  # 'X' no está en ('M', 'F')
         db_session.add(patient)
-        
-        # Act & Assert: commit should raise IntegrityError
+
+        # Act & Assert: commit debe lanzar IntegrityError
         with pytest.raises(IntegrityError):
             db_session.commit()
-        
-        # Cleanup: rollback failed transaction to not pollute session
+
+        # Cleanup: rollback de la transacción fallida para no contaminar la sesión
         db_session.rollback()
 
 
 class TestClassificationModel:
-    """Test Classification model."""
+    """Modelo Classification (registro de clasificaciones)."""
 
     def test_classification_model_exists(self):
-        """Test Classification model can be imported (smoke test)."""
+        """Classification se puede importar (prueba de humo)."""
         assert Classification is not None
 
     def test_classification_has_required_fields(self):
-        """Test Classification model has 14 columns: PK, FK, 11 clinical features, 3 outputs.
-        
-        Validates table metadata comprehensively:
-        - 15 total columns (id + patient_id + 11 features + 3 outputs)
-        - PK, FK with index and not null
-        - 9 integer features, 1 float (weight)
-        - 3 output fields with correct types
-        - classification_date has default (server-side or Python)
+        """Classification tiene la estructura de columnas esperada.
+
+        Valida el metadata de la tabla completo:
+        - 15 columnas (1 PK + 1 FK + 10 rasgos clínicos + 2 salidas
+          + classification_date; el género vive en Patient, no aquí)
+        - PK, FK con índice y no nullable
+        - 9 rasgos enteros, 1 flotante (weight)
+        - campos de salida con tipos correctos
+        - classification_date con default (Python o servidor)
         """
-        # Inspect table metadata
+        # Inspeccionar el metadata de la tabla
         cols = {c.name: c for c in Classification.__table__.columns}
         indexed_cols = {col.name for idx in Classification.__table__.indexes for col in idx.columns}
-        
-        # Total column count (1 PK + 1 FK + 11 features + 3 outputs = 14, but count shows 15)
+
+        # Total de columnas (1 PK + 1 FK + 11 rasgos + 2 salidas + 1 fecha)
         assert len(cols) == 15
-        
+
         # Primary key
         assert 'id' in cols and cols['id'].primary_key
-        
-        # Foreign key to Patient with RESTRICT, indexed, not nullable
-        assert ('patient_id' 
-                in cols 
-                and bool(cols['patient_id'].foreign_keys) 
+
+        # FK hacia Patient con RESTRICT, indexada y no nullable
+        assert ('patient_id'
+                in cols
+                and bool(cols['patient_id'].foreign_keys)
                 and not cols['patient_id'].nullable
                 and 'patient_id' in indexed_cols)
-        
-        # 9 integer clinical features
+
+        # 9 rasgos clínicos enteros
         int_features = ['age', 'ap_hi', 'ap_lo', 'cholesterol',
                         'gluc', 'smoke', 'alco', 'active', 'height']
         for feature in int_features:
             assert feature in cols and isinstance(cols[feature].type, Integer)
-            
-        # Weight is float (kg with decimals)
+
+        # weight es float (kg con decimales)
         assert 'weight' in cols and isinstance(cols['weight'].type, Float)
-        
-        # Output fields
+
+        # Campos de salida
         assert 'classification_result' in cols and isinstance(cols['classification_result'].type, Integer)
         assert 'risk_score' in cols and isinstance(cols['risk_score'].type, Float)
 
-        # Timestamp with default
+        # Marca temporal con default
         date_col = cols.get('classification_date')
         assert date_col is not None and isinstance(date_col.type, DateTime)
-        # Default can be Python-side (default) or server-side (server_default)
+        # El default puede ser Python-side (default) o server-side (server_default)
         assert date_col.default is not None or date_col.server_default is not None
 
     def test_classification_foreign_key_to_patient(self, db_session: Session):
-        """Test Classification references Patient via FK with RESTRICT behavior.
-        
-        Two scenarios tested:
-        1. Valid FK: patient exists -> insert succeeds
-        2. Invalid FK: patient_id doesn't exist -> IntegrityError raised
-        
-        Requires SQLite PRAGMA foreign_keys=ON (enabled in conftest.py).
+        """Classification referencia a Patient por FK con comportamiento RESTRICT.
+
+        Dos escenarios:
+        1. FK válida: el paciente existe -> la inserción se logra
+        2. FK inválida: patient_id inexistente -> se lanza IntegrityError
+
+        Requiere SQLite PRAGMA foreign_keys=ON (habilitado en conftest.py).
         """
-        # 1. Valid FK - create patient then classification with that patient_id
+        # 1. FK válida: crear paciente y luego clasificación con ese patient_id
         patient = Patient(name='Test FK', gender='M')
         db_session.add(patient)
         db_session.commit()
-        
+
         cls = Classification(
             patient_id=patient.id,
             age=50, ap_hi=120, ap_lo=80, cholesterol=1, gluc=1,
@@ -173,51 +171,51 @@ class TestClassificationModel:
             classification_result=1, risk_score=0.8
         )
         db_session.add(cls)
-        db_session.commit()  # Should succeed with valid FK
-        
+        db_session.commit()  # debe pasar con FK válida
+
         assert cls.id is not None
-        
-        # 2. Invalid FK - patient_id that doesn't exist
+
+        # 2. FK inválida: patient_id que no existe
         bad_cls = Classification(
-            patient_id=99999,  # non-existent patient
+            patient_id=99999,  # paciente inexistente
             age=50, ap_hi=120, ap_lo=80, cholesterol=1, gluc=1,
             smoke=0, alco=0, active=1, height=170, weight=70.0,
             classification_result=0, risk_score=0.1
         )
         db_session.add(bad_cls)
-        
-        # Should raise IntegrityError due to FK RESTRICT
+
+        # Debe lanzar IntegrityError por la FK RESTRICT
         with pytest.raises(IntegrityError):
             db_session.commit()
-        
+
         db_session.rollback()
 
     def test_classification_boolean_fields_stored_as_int(self, db_session: Session):
-        """Test smoke, alco, active stored as 0/1 integers in DB.
-        
-        Schema uses Mapped[int] for these fields (not Mapped[bool]).
-        Python bool (True/False) passed in -> stored as 1/0 int in DB.
-        Verify both conversion and type preservation.
+        """smoke, alco, active se guardan como enteros 0/1 en BD.
+
+        El esquema usa Mapped[int] para estos campos (no Mapped[bool]).
+        Se pasan bool de Python (True/False) y quedan almacenados como
+        1/0 en BD: se verifica la conversión y el tipo.
         """
         patient = Patient(name='Bool Test', gender='M')
         db_session.add(patient)
         db_session.commit()
-        
-        # Pass Python bool values
+
+        # Pasar valores bool de Python
         cls = Classification(
             patient_id=patient.id,
             age=50, ap_hi=120, ap_lo=80, cholesterol=1, gluc=1,
-            smoke=True,   # Python bool True
-            alco=False,   # Python bool False
-            active=True,  # Python bool True
+            smoke=True,   # bool True de Python
+            alco=False,   # bool False de Python
+            active=True,  # bool True de Python
             height=170, weight=70.0,
             classification_result=1, risk_score=0.8
         )
         db_session.add(cls)
         db_session.commit()
         db_session.refresh(cls)
-        
-        # In DB they are stored as int 0/1
+
+        # En BD se guardan como int 0/1
         assert cls.smoke == 1
         assert cls.alco == 0
         assert cls.active == 1
@@ -226,17 +224,19 @@ class TestClassificationModel:
         assert isinstance(cls.active, int)
 
     def test_classification_result_binary(self, db_session: Session):
-        """Test classification_result accepts 0 (no_riesgo) and 1 (riesgo).
-        
-        Validates both valid values (0, 1) are accepted.
-        Note: Value 2 is currently accepted if no CheckConstraint exists.
-        This test documents expected behavior; constraint should be added to model.
+        """classification_result acepta 0 (no_riesgo) y 1 (riesgo).
+
+        Valida que ambos valores válidos (0, 1) se aceptan. Nota: el
+        valor 2 actualmente se acepta porque no existe un
+        CheckConstraint sobre la columna; este test documenta el
+        comportamiento esperado, y la restricción debería agregarse al
+        modelo si el director del semillero lo aprueba.
         """
         patient = Patient(name='Binary Test', gender='M')
         db_session.add(patient)
         db_session.commit()
-        
-        # Valid value 0 (no_riesgo)
+
+        # Valor válido 0 (no_riesgo)
         cls0 = Classification(
             patient_id=patient.id, age=50, ap_hi=120, ap_lo=80,
             cholesterol=1, gluc=1, smoke=0, alco=0, active=1,
@@ -244,8 +244,8 @@ class TestClassificationModel:
         )
         db_session.add(cls0)
         db_session.commit()
-        
-        # Valid value 1 (riesgo)
+
+        # Valor válido 1 (riesgo)
         cls1 = Classification(
             patient_id=patient.id, age=50, ap_hi=120, ap_lo=80,
             cholesterol=1, gluc=1, smoke=0, alco=0, active=1,
@@ -253,31 +253,30 @@ class TestClassificationModel:
         )
         db_session.add(cls1)
         db_session.commit()
-        
-        # Invalid value 2 - documents expected behavior
-        # If CheckConstraint exists in model, this would raise IntegrityError
+
+        # Valor inválido 2 — documenta el comportamiento actual esperado
         cls_invalid = Classification(
             patient_id=patient.id, age=50, ap_hi=120, ap_lo=80,
             cholesterol=1, gluc=1, smoke=0, alco=0, active=1,
             height=170, weight=70.0, classification_result=2, risk_score=0.5
         )
         db_session.add(cls_invalid)
-        # Currently passes (no constraint), but documents expected behavior
+        # Pasa sin restricción en la columna (comportamiento documentado)
         db_session.commit()
 
     def test_risk_score_float_range(self, db_session: Session):
-        """Test risk_score stores float values correctly in 0.0-1.0 range.
-        
-        Tests boundary values (0.0, 1.0) and intermediate values.
-        Verifies type is float and value persists correctly.
+        """risk_score guarda floats en el rango 0.0-1.0.
+
+        Prueba valores de frontera (0.0, 1.0) e intermedios; verifica
+        tipo float y persistencia correcta del valor.
         """
         patient = Patient(name='Risk Test', gender='M')
         db_session.add(patient)
         db_session.commit()
-        
-        # Test boundary and intermediate values
+
+        # Valores de frontera e intermedios
         test_scores = [0.0, 0.15, 0.5, 0.85, 1.0]
-        
+
         for i, score in enumerate(test_scores):
             cls = Classification(
                 patient_id=patient.id,
@@ -289,28 +288,28 @@ class TestClassificationModel:
             db_session.add(cls)
             db_session.commit()
             db_session.refresh(cls)
-            
+
             assert cls.risk_score == score
             assert isinstance(cls.risk_score, float)
             assert 0.0 <= cls.risk_score <= 1.0
 
 
 class TestModelsRelationship:
-    """Test Patient-Classification relationship."""
+    """Relación Patient-Classification (1:N)."""
 
     def test_patient_has_classifications_relationship(self, db_session: Session):
-        """Test Patient.classifications returns list of related classifications.
-        
-        Verifies:
-        - Relationship loads all classifications for a patient
-        - Returned objects are Classification instances
-        - Each classification has correct patient_id
+        """patient.classifications devuelve la lista de clasificaciones.
+
+        Verifica:
+        - la relación carga todas las clasificaciones del paciente
+        - los objetos devueltos son instancias de Classification
+        - cada clasificación tiene el patient_id correcto
         """
         patient = Patient(name='Rel Test', gender='M')
         db_session.add(patient)
         db_session.commit()
-        
-        # Create two classifications for same patient
+
+        # Crear dos clasificaciones para el mismo paciente
         c1 = Classification(
             patient_id=patient.id, age=50, ap_hi=120, ap_lo=80,
             cholesterol=1, gluc=1, smoke=0, alco=0, active=1,
@@ -323,24 +322,25 @@ class TestModelsRelationship:
         )
         db_session.add_all([c1, c2])
         db_session.commit()
-        db_session.refresh(patient)  # Refresh to load relationship
-        
-        # Relationship loads both classifications
+        db_session.refresh(patient)  # refresh para cargar la relación
+
+        # La relación carga ambas clasificaciones
         assert len(patient.classifications) == 2
         assert all(isinstance(c, Classification) for c in patient.classifications)
-        # All belong to this patient
+        # Todas pertenecen a este paciente
         assert all(c.patient_id == patient.id for c in patient.classifications)
 
     def test_classification_has_patient_backref(self, db_session: Session):
-        """Test Classification.patient backref returns parent Patient.
-        
-        Verifies bidirectional relationship: classification.patient -> Patient.
-        Checks type, ID match, and field access.
+        """classification.patient devuelve el Patient padre.
+
+        Verifica la relación bidireccional:
+        classification.patient -> Patient; comprueba tipo, coincidencia
+        de id y acceso a campos.
         """
         patient = Patient(name='Backref Test', gender='F')
         db_session.add(patient)
         db_session.commit()
-        
+
         cls = Classification(
             patient_id=patient.id, age=45, ap_hi=115, ap_lo=75,
             cholesterol=1, gluc=1, smoke=0, alco=0, active=1,
@@ -349,27 +349,27 @@ class TestModelsRelationship:
         db_session.add(cls)
         db_session.commit()
         db_session.refresh(cls)
-        
-        # Backref works: classification -> patient
+
+        # El backref funciona: classification -> patient
         assert cls.patient is not None
         assert isinstance(cls.patient, Patient)
         assert cls.patient.id == patient.id
         assert cls.patient.name == 'Backref Test'
 
     def test_cascade_delete_orphan(self, db_session: Session):
-        """Test cascade delete-orphan: deleting Patient removes its Classifications.
-        
-        Verifies cascade="all, delete-orphan" on Patient.classifications relationship.
-        Steps:
-        1. Create patient with 2 classifications
-        2. Verify both exist
-        3. Delete patient
-        4. Verify both classifications and patient are gone
+        """Cascade delete-orphan: al eliminar un Patient se borran sus Classification.
+
+        Verifica cascade="all, delete-orphan" en la relación
+        Patient.classifications. Pasos:
+        1. Crear un paciente con 2 clasificaciones
+        2. Verificar que ambas existen
+        3. Eliminar el paciente
+        4. Verificar que las 2 clasificaciones y el paciente ya no están
         """
         patient = Patient(name='Cascade Test', gender='M')
         db_session.add(patient)
         db_session.commit()
-        
+
         c1 = Classification(
             patient_id=patient.id, age=50, ap_hi=120, ap_lo=80,
             cholesterol=1, gluc=1, smoke=0, alco=0, active=1,
@@ -382,19 +382,19 @@ class TestModelsRelationship:
         )
         db_session.add_all([c1, c2])
         db_session.commit()
-        
+
         c1_id, c2_id = c1.id, c2.id
         patient_id = patient.id
-        
-        # Verify both exist before deletion
+
+        # Verificar que ambas existen antes de la eliminación
         assert db_session.get(Classification, c1_id) is not None
         assert db_session.get(Classification, c2_id) is not None
-        
-        # Delete patient - cascade should delete classifications
+
+        # Eliminar el paciente: el cascade debe borrar las clasificaciones
         db_session.delete(patient)
         db_session.commit()
-        
-        # All three should be gone
+
+        # Las tres filas ya no deben existir
         assert db_session.get(Classification, c1_id) is None
         assert db_session.get(Classification, c2_id) is None
         assert db_session.get(Patient, patient_id) is None

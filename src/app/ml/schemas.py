@@ -1,3 +1,11 @@
+"""Esquemas de entrada y salida del Modelo de clasificación (Pydantic v2).
+
+ClassificationInput valida los datos que llegan desde la API; los límites
+inferior/superior provienen del análisis de exploración de datos (EDA) y
+son INCLUSIVOS. ClassificationOutput refleja lo que se guarda en la tabla
+classifications.
+"""
+
 from datetime import datetime
 from typing import Annotated, Literal
 
@@ -5,6 +13,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class ClassificationInput(BaseModel):
+    """Entrada del Modelo de clasificación: 11 características clínicas."""
 
     age: Annotated[int, Field(ge=29, le=64, description="Edad en años")]
     ap_hi: Annotated[int, Field(ge=70, le=250, description="Presión sistólica (mmHg)")]
@@ -20,13 +29,14 @@ class ClassificationInput(BaseModel):
 
     @model_validator(mode="after")
     def validate_bp(self) -> "ClassificationInput":
-        """Validar que presión sistólica > diastólica."""
+        """Validar que la presión sistólica (ap_hi) sea mayor que la diastólica (ap_lo)."""
         if self.ap_hi <= self.ap_lo:
             raise ValueError("Presión sistólica debe ser > diastólica")
         return self
 
 
 class ClassificationOutput(BaseModel):
+    """Resultado de la clasificación, tal como se guarda en la base de datos."""
 
     classification_result: Literal["riesgo", "no_riesgo"]
     risk_score: Annotated[float, Field(ge=0.0, le=1.0)]

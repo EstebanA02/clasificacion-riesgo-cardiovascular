@@ -1,4 +1,4 @@
-"""Tests for configuration settings."""
+"""Pruebas de la configuración (settings)."""
 
 import pytest
 from pathlib import Path
@@ -7,10 +7,10 @@ from app.config import Settings, settings
 
 
 class TestSettings:
-    """Test configuration loading."""
+    """Carga de la configuración desde variables de entorno."""
 
     def test_settings_load_from_env(self, monkeypatch):
-        """Test settings load from environment variables."""
+        """Los settings se cargan desde variables de entorno."""
         monkeypatch.setenv("DATABASE_URL", "sqlite:///test.db")
         monkeypatch.setenv("MODEL_PATH", "models/test.joblib")
         monkeypatch.setenv("APP_TITLE", "Test App")
@@ -24,13 +24,13 @@ class TestSettings:
         assert test_settings.DEBUG is False
 
     def test_settings_defaults(self):
-        """Test default settings when no env vars provided."""
-        # This test uses the global settings instance
+        """Los valores por defecto se aplican sin variables de entorno."""
+        # Este test usa la instancia global de settings
         assert settings.DATABASE_URL == "sqlite:///cv_risk.db"
         assert settings.MODEL_PATH == Path("models/model.joblib")
         assert settings.APP_TITLE == "Clasificación Riesgo Cardiovascular"
         assert settings.DEBUG is True
 
     def test_model_path_is_path_object(self):
-        """Test MODEL_PATH is a Path object."""
+        """MODEL_PATH es un objeto Path."""
         assert isinstance(settings.MODEL_PATH, Path)

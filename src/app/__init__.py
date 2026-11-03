@@ -1,2 +1,1 @@
-def main() -> None:
-    print("Hello from 1-semilliero-de-investigacion!")
+"""Paquete de la aplicación: API FastAPI, modelos de BD, esquemas y ML."""

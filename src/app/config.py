@@ -1,4 +1,4 @@
-"""Configuration settings for the cardiovascular risk classification system."""
+"""Configuración del sistema de clasificación de riesgo cardiovascular."""
 
 from pathlib import Path
 
@@ -6,7 +6,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    """Application settings loaded from environment variables."""
+    """Configuración de la aplicación cargada desde variables de entorno."""
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -14,13 +14,13 @@ class Settings(BaseSettings):
         case_sensitive=False,
     )
 
-    # Database
+    # Base de datos
     DATABASE_URL: str = "sqlite:///cv_risk.db"
 
-    # ML Model
+    # Modelo de clasificación
     MODEL_PATH: Path = Path("models/model.joblib")
 
-    # App
+    # Aplicación
     APP_TITLE: str = "Clasificación Riesgo Cardiovascular"
     APP_VERSION: str = "0.1.0"
     DEBUG: bool = True

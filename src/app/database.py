@@ -1,4 +1,4 @@
-"""Database configuration and session management."""
+"""Configuración de base de datos y gestión de sesiones."""
 
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import DeclarativeBase, sessionmaker, Session
@@ -7,27 +7,28 @@ from app.config import settings
 
 
 class Base(DeclarativeBase):
-    """Base class for all SQLAlchemy models."""
+    """Clase base para todos los modelos de SQLAlchemy."""
     pass
 
 
-# Create sync engine
 engine = create_engine(
     settings.DATABASE_URL,
     echo=settings.DEBUG,
     future=True,
 )
 
-# Enable foreign keys for SQLite
+# SQLite NO aplica integridad referencial por defecto: el PRAGMA
+# foreign_keys=ON debe habilitarse POR CONEXIÓN (no es un ajuste global),
+# por eso se asocia mediante un listener al evento "connect".
 if settings.DATABASE_URL.startswith("sqlite"):
     @event.listens_for(engine, "connect")
     def set_sqlite_pragma(dbapi_connection, connection_record):
+        """Habilita el cumplimiento de FK en cada conexión SQLite."""
         cursor = dbapi_connection.cursor()
         cursor.execute("PRAGMA foreign_keys=ON")
         cursor.close()
 
 
-# Session factory
 session_maker = sessionmaker(
     engine,
     class_=Session,
@@ -36,7 +37,7 @@ session_maker = sessionmaker(
 
 
 def get_db() -> Session:
-    """Dependency for FastAPI to get DB session."""
+    """Dependencia de FastAPI para obtener una sesión de BD."""
     session = session_maker()
     try:
         yield session
@@ -45,10 +46,10 @@ def get_db() -> Session:
 
 
 def init_db() -> None:
-    """Initialize database tables on startup."""
+    """Crea las tablas de la base de datos al arrancar."""
     Base.metadata.create_all(engine)
 
 
 def close_db() -> None:
-    """Close database connections on shutdown."""
+    """Cierra las conexiones de la base de datos al apagar."""
     engine.dispose()

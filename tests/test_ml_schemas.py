@@ -1,4 +1,4 @@
-"""Tests for ML Schemas - Pydantic v2 validators."""
+"""Pruebas de los esquemas ML — validadores de Pydantic v2."""
 
 import pytest
 from datetime import datetime
@@ -7,12 +7,12 @@ from app.ml.schemas import ClassificationInput, ClassificationOutput
 
 
 class TestClassificationInput:
-    """Tests for ClassificationInput validators."""
+    """Validadores de ClassificationInput."""
 
-    # --- Valid base data for reuse (within new EDA-based ranges) ---
+    # --- Datos base válidos para reutilizar (dentro de los rangos del EDA) ---
     @pytest.fixture
     def valid_input(self):
-        """Base valid input data within EDA-based ranges."""
+        """Datos base válidos dentro de los rangos derivados del EDA."""
         return {
             "age": 50,           # 29-64
             "ap_hi": 120,        # 70-250
@@ -27,12 +27,12 @@ class TestClassificationInput:
             "gender": "M",
         }
 
-    # --- Valid input passes ---
+    # --- Entrada válida pasa ---
     def test_valid_input_passes(self, valid_input):
-        """Valid input should pass all validators."""
+        """Una entrada válida pasa todos los validadores."""
         ClassificationInput(**valid_input)
 
-    # --- age boundaries (29-64 años, INCLUSIVOS) ---
+    # --- límites de age (29-64 años, INCLUSIVOS) ---
     @pytest.mark.parametrize("age,should_pass", [
         (28, False),  # < 29
         (29, True),   # límite inferior (ge=29)
@@ -41,7 +41,7 @@ class TestClassificationInput:
         (65, False),  # > 64
     ])
     def test_age_bounds(self, valid_input, age, should_pass):
-        """Age must be between 29 and 64 years inclusive (ge=29, le=64)."""
+        """age debe estar entre 29 y 64 años, inclusive (ge=29, le=64)."""
         data = {**valid_input, "age": age}
         if should_pass:
             ClassificationInput(**data)
@@ -49,7 +49,7 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- ap_hi boundaries (70-250 mmHg, INCLUSIVOS) ---
+    # --- límites de ap_hi (70-250 mmHg, INCLUSIVOS) ---
     @pytest.mark.parametrize("ap_hi,ap_lo,should_pass", [
         (69, 60, False),   # < 70
         (70, 60, True),    # límite inferior (ge=70)
@@ -59,9 +59,10 @@ class TestClassificationInput:
         (251, 200, False), # > 250
     ])
     def test_ap_hi_bounds(self, valid_input, ap_hi, ap_lo, should_pass):
-        """Systolic pressure must be >=70 and <=250 mmHg (ge=70, le=250).
-        
-        Adjusts ap_lo to be < ap_hi to avoid cross-field validation conflict.
+        """La presión sistólica debe ser >=70 y <=250 mmHg (ge=70, le=250).
+
+        Ajusta ap_lo para que quede por debajo de ap_hi y no interfiera
+        la validación entre campos.
         """
         data = {**valid_input, "ap_hi": ap_hi, "ap_lo": ap_lo}
         if should_pass:
@@ -70,7 +71,7 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- ap_lo boundaries (40-200 mmHg, INCLUSIVOS) ---
+    # --- límites de ap_lo (40-200 mmHg, INCLUSIVOS) ---
     @pytest.mark.parametrize("ap_lo,should_pass", [
         (39, False),   # < 40
         (40, True),    # límite inferior (ge=40)
@@ -81,12 +82,13 @@ class TestClassificationInput:
         (201, False),  # > 200
     ])
     def test_ap_lo_bounds(self, valid_input, ap_lo, should_pass):
-        """Diastolic pressure must be >=40 and <=200 mmHg (ge=40, le=200).
-        
-        Adjusts ap_hi to be > ap_lo to avoid cross-field validation conflict.
+        """La presión diastólica debe ser >=40 y <=200 mmHg (ge=40, le=200).
+
+        Ajusta ap_hi para que quede por encima de ap_lo y no interfiera
+        la validación entre campos.
         """
         data = {**valid_input, "ap_lo": ap_lo}
-        # For upper bound test, need ap_hi > ap_lo
+        # Para los límites superiores se necesita ap_hi > ap_lo
         if ap_lo >= 150:
             data["ap_hi"] = ap_lo + 10
         if should_pass:
@@ -95,7 +97,7 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- cross-field: ap_hi > ap_lo ---
+    # --- entre campos: ap_hi > ap_lo ---
     @pytest.mark.parametrize("ap_hi,ap_lo,should_pass", [
         (120, 80, True),   # válido
         (120, 120, False), # igual no válido
@@ -103,7 +105,7 @@ class TestClassificationInput:
         (100, 99, True),   # diferencia mínima válida
     ])
     def test_ap_hi_gt_ap_lo(self, valid_input, ap_hi, ap_lo, should_pass):
-        """Systolic pressure must be strictly greater than diastolic."""
+        """La presión sistólica debe ser estrictamente mayor que la diastólica."""
         data = {**valid_input, "ap_hi": ap_hi, "ap_lo": ap_lo}
         if should_pass:
             ClassificationInput(**data)
@@ -111,16 +113,16 @@ class TestClassificationInput:
             with pytest.raises(ValueError, match="Presión sistólica debe ser > diastólica"):
                 ClassificationInput(**data)
 
-    # --- cholesterol enum (1, 2, 3) ---
+    # --- enum de cholesterol (1, 2, 3) ---
     @pytest.mark.parametrize("chol,should_pass", [
         (0, False),  # fuera de rango
         (1, True),   # normal
-        (2, True),   # above normal
-        (3, True),   # well above normal
+        (2, True),   # elevado
+        (3, True),   # muy elevado
         (4, False),  # fuera de rango
     ])
     def test_cholesterol_enum(self, valid_input, chol, should_pass):
-        """Cholesterol must be 1, 2, or 3."""
+        """cholesterol debe ser 1, 2 o 3."""
         data = {**valid_input, "cholesterol": chol}
         if should_pass:
             ClassificationInput(**data)
@@ -128,7 +130,7 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- gluc enum (1, 2, 3) ---
+    # --- enum de gluc (1, 2, 3) ---
     @pytest.mark.parametrize("gluc,should_pass", [
         (0, False),
         (1, True),
@@ -137,7 +139,7 @@ class TestClassificationInput:
         (4, False),
     ])
     def test_gluc_enum(self, valid_input, gluc, should_pass):
-        """Glucose must be 1, 2, or 3."""
+        """gluc debe ser 1, 2 o 3."""
         data = {**valid_input, "gluc": gluc}
         if should_pass:
             ClassificationInput(**data)
@@ -145,16 +147,16 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- gender enum (M, F) ---
+    # --- enum de gender (M, F) ---
     @pytest.mark.parametrize("gender,should_pass", [
         ("M", True),
         ("F", True),
         ("X", False),
-        ("m", False),  # case sensitive
+        ("m", False),  # sensible a mayúsculas
         ("", False),
     ])
     def test_gender_enum(self, valid_input, gender, should_pass):
-        """Gender must be 'M' or 'F' (case sensitive)."""
+        """gender debe ser 'M' o 'F' (sensible a mayúsculas)."""
         data = {**valid_input, "gender": gender}
         if should_pass:
             ClassificationInput(**data)
@@ -162,7 +164,7 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- height boundaries (120-220 cm, INCLUSIVOS) ---
+    # --- límites de height (120-220 cm, INCLUSIVOS) ---
     @pytest.mark.parametrize("height,should_pass", [
         (119, False),  # < 120
         (120, True),   # límite inferior (ge=120)
@@ -171,7 +173,7 @@ class TestClassificationInput:
         (221, False),  # > 220
     ])
     def test_height_bounds(self, valid_input, height, should_pass):
-        """Height must be between 120-220 cm inclusive (ge=120, le=220)."""
+        """height debe estar entre 120 y 220 cm, inclusive (ge=120, le=220)."""
         data = {**valid_input, "height": height}
         if should_pass:
             ClassificationInput(**data)
@@ -179,7 +181,7 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- weight boundaries (30-200 kg, INCLUSIVOS) ---
+    # --- límites de weight (30-200 kg, INCLUSIVOS) ---
     @pytest.mark.parametrize("weight,should_pass", [
         (29.9, False),  # < 30
         (30.0, True),   # límite inferior (ge=30)
@@ -188,7 +190,7 @@ class TestClassificationInput:
         (200.1, False), # > 200
     ])
     def test_weight_bounds(self, valid_input, weight, should_pass):
-        """Weight must be between 30-200 kg inclusive (ge=30, le=200)."""
+        """weight debe estar entre 30 y 200 kg, inclusive (ge=30, le=200)."""
         data = {**valid_input, "weight": weight}
         if should_pass:
             ClassificationInput(**data)
@@ -196,24 +198,24 @@ class TestClassificationInput:
             with pytest.raises(ValueError):
                 ClassificationInput(**data)
 
-    # --- boolean fields accept bool ---
+    # --- campos booleanos aceptan bool ---
     @pytest.mark.parametrize("field,value", [
         ("smoke", True), ("smoke", False),
         ("alco", True), ("alco", False),
         ("active", True), ("active", False),
     ])
     def test_boolean_fields_accept_bool(self, valid_input, field, value):
-        """Boolean fields should accept True/False."""
+        """Los campos booleanos aceptan True/False."""
         data = {**valid_input, field: value}
         ClassificationInput(**data)
 
 
 class TestClassificationOutput:
-    """Tests for ClassificationOutput schema."""
+    """Esquema ClassificationOutput."""
 
     def test_output_from_attributes(self):
-        """ClassificationOutput should work with from_attributes (ORM)."""
-        # Simulate ORM object
+        """ClassificationOutput funciona con from_attributes (ORM)."""
+        # Simular un objeto ORM
         class MockORM:
             classification_result = "riesgo"
             risk_score = 0.85
@@ -225,8 +227,8 @@ class TestClassificationOutput:
         assert output.classification_date == datetime(2024, 1, 15, 10, 30)
 
     def test_output_literal_values(self):
-        """Output accepts only 'riesgo' or 'no_riesgo'."""
-        # Valid
+        """La salida acepta solo 'riesgo' o 'no_riesgo'."""
+        # Válido
         ClassificationOutput(
             classification_result="riesgo",
             risk_score=0.8,
@@ -237,7 +239,7 @@ class TestClassificationOutput:
             risk_score=0.2,
             classification_date=datetime.now()
         )
-        # Invalid
+        # Inválido
         with pytest.raises(ValueError):
             ClassificationOutput(
                 classification_result="alto",
@@ -246,8 +248,8 @@ class TestClassificationOutput:
             )
 
     def test_risk_score_float_bounds(self):
-        """risk_score must be float between 0.0 and 1.0 inclusive (ge=0.0, le=1.0)."""
-        # Valid boundaries
+        """risk_score debe ser float entre 0.0 y 1.0, inclusive (ge=0.0, le=1.0)."""
+        # Fronteras válidas
         ClassificationOutput(
             classification_result="riesgo",
             risk_score=0.0,
@@ -263,7 +265,7 @@ class TestClassificationOutput:
             risk_score=0.5,
             classification_date=datetime.now()
         )
-        # Invalid boundaries
+        # Fronteras inválidas
         with pytest.raises(ValueError):
             ClassificationOutput(
                 classification_result="riesgo",

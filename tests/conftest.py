@@ -1,5 +1,8 @@
 """Fixtures y configuración de pytest."""
 
+import sys
+from pathlib import Path
+
 import pytest
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session
@@ -8,6 +11,11 @@ from fastapi.testclient import TestClient
 from app.config import settings
 from app.database import Base, get_db
 from app.main import create_app
+
+# train.py vive en la raíz del repo (no es parte del paquete app)
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+from train import DEFAULT_DATA_PATH, train
 
 
 @pytest.fixture(scope="session")
@@ -74,3 +82,18 @@ def sample_classification_features():
         "weight": 70,
         "gender": "M",
     }
+
+@pytest.fixture(scope="session")
+def trained(tmp_path_factory):
+    """Entrena el modelo UNA vez por sesion y comparte el artefacto temporal.
+
+    Infraestructura compartida: la consumen los tests de entrenamiento
+    (test_train.py) y los de inferencia (test_inference.py). Entrena a
+    rutas temporales con cv_folds=3; NUNCA toca models/model.joblib real.
+    """
+    out = tmp_path_factory.mktemp("ml_artifacts")
+    model_path = out / "model.joblib"
+    report_path = out / "train_report.json"
+    train(data_path=DEFAULT_DATA_PATH, model_path=model_path,
+          report_path=report_path, cv_folds=3)
+    return model_path, report_path

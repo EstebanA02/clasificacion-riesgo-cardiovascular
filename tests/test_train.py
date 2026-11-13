@@ -1,42 +1,29 @@
 """Pruebas del proceso de entrenamiento (Task 1.4).
 
-Cubren: generacion de artefactos, estructura del joblib
+Cubren: generación de artefactos, estructura del joblib
 {"pipeline", "threshold"}, contenido del reporte JSON, criterio de
-seleccion por precision a recall >= MIN_RECALL, y filtros de load_data.
+selección por precisión a recall >= MIN_RECALL, y filtros de load_data.
 
-Los tests que requieren entrenar corren train() a rutas temporales con
-cv_folds=3 (marcados slow, ~30s) y NUNCA tocan models/model.joblib real.
-Los tests de MLService.classify y lifespan se escriben en Tasks 1.5 y 1.6.
+La fixture trained (conftest.py, scope session) entrena UNA vez por
+corrida a rutas temporales con cv_folds=3; NUNCA toca
+models/model.joblib real.
 """
 
 import json
-import sys
 import warnings
-from pathlib import Path
 
 import joblib
 import pandas as pd
 import pytest
-
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from train import DEFAULT_DATA_PATH, FEATURE_ORDER, MIN_RECALL, load_data, train
 
 MODEL_KEYS = {"pipeline", "threshold"}
 METRICS = ("accuracy", "precision", "recall", "f1")
 
-@pytest.fixture(scope="module")
-def trained(tmp_path_factory):
-    """Ejecuta train() a rutas temporales (cv_folds=3) una vez por modulo."""
-    out = tmp_path_factory.mktemp("ml_artifacts")
-    model_path = out / "model.joblib"
-    report_path = out / "train_report.json"
-    train(data_path=DEFAULT_DATA_PATH, model_path=model_path,
-          report_path=report_path, cv_folds=3)
-    return model_path, report_path
 
 def test_load_data_filters(tmp_path):
-    """load_data descarta filas fuera de rango, no incluye 'id' y age queda en anios."""
+    """load_data descarta filas fuera de rango, no incluye 'id' y age queda en años."""
     base = dict(gender=1, height=170, weight=70, ap_hi=120, ap_lo=80,
                 cholesterol=1, gluc=1, smoke=0, alco=0, active=1, cardio=0)
     sin_gender = {k: v for k, v in base.items() if k != "gender"}
@@ -45,8 +32,8 @@ def test_load_data_filters(tmp_path):
     sin_presiones = {k: v for k, v in base.items()
                      if k not in ("ap_hi", "ap_lo")}
     filas = [
-        dict(id=1, age=35 * 365, **base),                 # valida
-        dict(id=2, age=42 * 365, gender=2, **sin_gender), # valida
+        dict(id=1, age=35 * 365, **base),                 # válida
+        dict(id=2, age=42 * 365, gender=2, **sin_gender), # válida
         dict(id=3, age=50 * 365, ap_hi=12000, **sin_ap_hi),   # ap_hi fuera de rango
         dict(id=4, age=31 * 365, weight=10, **sin_weight),    # weight fuera de rango
         dict(id=5, age=33 * 365, ap_hi=75, ap_lo=90, **sin_presiones),  # ap_hi <= ap_lo
@@ -59,7 +46,8 @@ def test_load_data_filters(tmp_path):
     assert "id" not in resultado.columns
     assert list(resultado.columns) == FEATURE_ORDER + ["cardio"]
     assert len(resultado) == 2
-    assert set(resultado["age"]) == {35, 42}  # dias -> anios
+    assert set(resultado["age"]) == {35, 42}  # días -> años
+
 
 @pytest.mark.slow
 def test_train_generates_artifacts(trained):
@@ -67,6 +55,7 @@ def test_train_generates_artifacts(trained):
     model_path, report_path = trained
     assert model_path.exists()
     assert report_path.exists()
+
 
 @pytest.mark.slow
 def test_artifact_structure(trained):
@@ -79,9 +68,10 @@ def test_artifact_structure(trained):
     assert isinstance(threshold, float)
     assert 0.0 < threshold < 1.0
 
+
 @pytest.mark.slow
 def test_report_content(trained):
-    """El reporte tiene selected_model, min_recall, meets_min_recall y metrics completas."""
+    """El reporte tiene selected_model, min_recall, meets_min_recall y métricas completas."""
     _, report_path = trained
     report = json.loads(report_path.read_text(encoding="utf-8"))
     assert isinstance(report["selected_model"], str)
@@ -99,14 +89,16 @@ def test_report_content(trained):
         assert isinstance(model_metrics["precision_at_min_recall"], float)
         assert isinstance(model_metrics["recall_at_threshold"], float)
 
+
 @pytest.mark.slow
 def test_selected_model_is_best_precision(trained):
-    """El seleccionado es el de mayor precision_at_min_recall (recall como restriccion)."""
+    """El seleccionado es el de mayor precision_at_min_recall (recall como restricción)."""
     _, report_path = trained
     report = json.loads(report_path.read_text(encoding="utf-8"))
     metrics = report["metrics"]
     mejor = max(metrics, key=lambda n: metrics[n]["precision_at_min_recall"])
     assert report["selected_model"] == mejor
+
 
 @pytest.mark.slow
 def test_recall_at_threshold(trained):
@@ -118,5 +110,5 @@ def test_recall_at_threshold(trained):
     if recall < report["min_recall"]:
         warnings.warn(
             f"recall_at_threshold del ganador ({recall:.4f}) < MIN_RECALL "
-            f"({report['min_recall']}) — el modelo no alcanza el minimo declarado"
+            f"({report['min_recall']}) — el modelo no alcanza el mínimo declarado"
         )

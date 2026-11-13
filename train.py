@@ -30,12 +30,7 @@ from sklearn.model_selection import StratifiedKFold, cross_validate, cross_val_p
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from xgboost import XGBClassifier
-
-# Orden de columnas que espera MLService al inferir
-FEATURE_ORDER = [
-    "age", "gender", "height", "weight", "ap_hi", "ap_lo",
-    "cholesterol", "gluc", "smoke", "alco", "active",
-]
+from app.ml.feature import FEATURE_ORDER
 
 # Rutas por defecto de los artefactos
 DEFAULT_DATA_PATH = Path("data/cardio_train.csv")

@@ -1,6 +1,6 @@
-"""Factory de la aplicación FastAPI y gestión del ciclo de vida"""
+"""Factory de la aplicación FastAPI y gestión del ciclo de vida."""
 
-from contextlib import contextmanager
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
@@ -9,25 +9,34 @@ from fastapi.templating import Jinja2Templates
 
 from app.config import settings
 from app.database import init_db, close_db
+from app.ml.inference import MLService
 
 
 templates = Jinja2Templates(directory="src/app/templates")
 
 
-@contextmanager
-def lifespan(app: FastAPI):
-    """Ciclo de vida de la app: arranque y apagado (síncrono)."""
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Ciclo de vida de la app: arranque y apagado (asíncrono).
+
+    Startup:
+    - Inicializa la base de datos (create_all)
+    - Verifica que el artefacto del Modelo de clasificación exista
+    - Instancia MLService UNA sola vez y lo guarda en app.state.ml_service
+      para acceso vía Depends(MLService.from_app_state) en los routers.
+
+    Shutdown:
+    - Cierra las conexiones de la base de datos.
+    """
     init_db()
 
-    # Verificar que el Modelo de clasificación exista antes de servir tráfico
     model_path = Path(settings.MODEL_PATH)
     if not model_path.exists():
         raise RuntimeError(
             f"Model not found at {model_path}. Run 'uv run python train.py' first."
         )
 
-    # MLService se cargará aquí en la Task 1.5
-    # app.state.ml_service = MLService(model_path)
+    app.state.ml_service = MLService(model_path)
 
     yield
 
@@ -44,7 +53,7 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(404)
     def not_found_handler(request: Request, exc: Exception):
-        """Responde 404"""
+        """Responde 404 con detalle en español."""
         return JSONResponse(
             status_code=404,
             content={"detail": "Recurso no encontrado"},
@@ -58,11 +67,12 @@ def create_app() -> FastAPI:
             content={"detail": "Error de validación", "errors": str(exc)},
         )
 
-    # Los routers se agregarán en tareas posteriores
-    # app.include_router(patients_router)
-    # app.include_router(classification_router)
-    # app.include_router(history_router)
-    # app.include_router(reportes_router)
+    # Placeholders de routers (Fase 2): se descomentarán cuando existan
+    # from app.api import patients, classification, history, reportes
+    # app.include_router(patients.router, prefix="/pacientes", tags=["pacientes"])
+    # app.include_router(classification.router, prefix="/clasificaciones", tags=["clasificaciones"])
+    # app.include_router(history.router, prefix="/historial", tags=["historial"])
+    # app.include_router(reportes.router, prefix="/reportes", tags=["reportes"])
 
     return app
 

@@ -4,15 +4,17 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from fastapi.templating import Jinja2Templates
+from fastapi.encoders import jsonable_encoder
 
 from app.config import settings
 from app.database import init_db, close_db
 from app.ml.inference import MLService
 
 
-templates = Jinja2Templates(directory="src/app/templates")
+templates = Jinja2Templates(directory=Path(__file__).parent / "templates")
 
 
 @asynccontextmanager
@@ -33,7 +35,8 @@ async def lifespan(app: FastAPI):
     model_path = Path(settings.MODEL_PATH)
     if not model_path.exists():
         raise RuntimeError(
-            f"Model not found at {model_path}. Run 'uv run python train.py' first."
+            f"Modelo no encontrado en {model_path}. "
+            f"Ejecuta 'uv run python train.py' primero."
         )
 
     app.state.ml_service = MLService(model_path)
@@ -59,12 +62,15 @@ def create_app() -> FastAPI:
             content={"detail": "Recurso no encontrado"},
         )
 
-    @app.exception_handler(422)
-    def validation_error_handler(request: Request, exc: Exception):
+    @app.exception_handler(RequestValidationError)
+    def validation_error_handler(request: Request, exc: RequestValidationError):
         """Responde 422 con el detalle de los errores de validación."""
         return JSONResponse(
             status_code=422,
-            content={"detail": "Error de validación", "errors": str(exc)},
+            content={
+                "detail": "Error de validación",
+                "errors": jsonable_encoder(exc.errors()),
+            },
         )
 
     # Placeholders de routers (Fase 2): se descomentarán cuando existan
